@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/BeerCoin.iml" filepath="$PROJECT_DIR$/BeerCoin.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/jelop-cryptocurrency-main.iml" filepath="$PROJECT_DIR$/.idea/jelop-cryptocurrency-main.iml" />
     </modules>
   </component>
 </project>
