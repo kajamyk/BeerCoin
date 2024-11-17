@@ -20,7 +20,7 @@ class Wallet {
     this.#keyPair.push({publicKey: getPublicKeyToHex(generatedPublicKey), privateKey: generatedPrivateKey})
 
     console.log('Wallet created')
-    this.show()
+    // this.show()
   }
 
   static loadFromFile(filePath, password) {

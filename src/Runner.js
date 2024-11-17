@@ -1,4 +1,5 @@
 import readlineSync from 'readline'
+import Block from './Block.js'
 import Wallet from './Wallet.js'
 import Node from './Node.js'
 
@@ -22,29 +23,66 @@ export default class Runner {
     this.terminal.on('line', input => {
       this.promptForOptions()
     })
-
   }
 
-  promptForOptions() {
+  async promptForOptions() {
     console.log('\n')
     console.table({
-      'Save wallet': {value: 1},
-      'Load wallet': {value: 2},
-      'Show connected': {value: 3},
-      'Connect to node': {value: 4},
-      'Show wallet': {value: 5},
-      'Add key': {value: 6},
+      'Connect to node': {value: 1},
+      'Show wallet': {value: 2},
+      'Add block': {value: 3},
+      'Save wallet': {value: 4},
+      'Add key pair': {value: 5},
+      'Show connected': {value: 6},
     })
     console.log('\n')
-    this.terminal.question('Please input value: ', value => {
+    this.terminal.question('Please input value: ', async value => {
       this.#selectedOption = value
-      this.handleStart()
+      await this.handleStart()
+      await this.promptForOptions()
     })
   }
 
-  handleStart() {
+  async handleStart() {
+    console.log('You selected: ', this.#selectedOption)
     switch (this.#selectedOption) {
       case '1':
+        if (!this.node) {
+          console.log('You need to have a wallet to make a connection!')
+          break
+        }
+        this.terminal.question('Enter port: ', port => {
+          this.node.connectToNode({port, shouldConnectToBlockchain: true})
+        })
+
+        break
+      case '2': {
+        if (!this.node) {
+          console.log('You need to have a wallet to show it!')
+          break
+        }
+        this.node.wallet.show()
+        break
+      }
+      case '3': {
+        if (!this.node) {
+          console.log('You need to have a wallet to add block!')
+          break
+        }
+        this.terminal.question('From: ', from => {
+          this.terminal.question('to: ', to => {
+            this.terminal.question('amount: ', amount => {
+              const block = new Block(Date.now().toString(), [
+                {from, to, amount},
+              ])
+              this.node.blockchain.addBlock(block)
+              this.node.sendBlockToPeers(block)
+            })
+          })
+        })
+        break
+      }
+      case '4': {
         if (!this.node) {
           console.log('You need to have a wallet!')
           break
@@ -54,46 +92,18 @@ export default class Runner {
           this.node.wallet.saveToFile(`myWallet${this.node.port}.dat`, password)
         })
         break
-      case '2':
-        // To save the wallet:
-        this.terminal.question('Enter password: ', password => {
-          const loadedWallet = Wallet.loadFromFile(`myWallet${this.node.port}.dat`, password)
-          if (!loadedWallet) {
-            console.log('wrong password')
-            return
-          }
-          this.node = new Node(loadedWallet)
-          // this.node.run()
-        })
+      }
+      case '5': {
+        this.node.wallet.addKeyPair()
+        console.log('Key pair was added')
         break
-      case '3':
+      }
+      case '6': {
         if (!this.node) {
           console.log('You need to have a wallet to show connected nodes!')
           break
         }
         console.table(this.node.knownNodes.map(({port}) => ({port})))
-        break
-      case '4':
-        if (!this.node) {
-          console.log('You need to have a wallet to make a connection!')
-          break
-        }
-        this.terminal.question('Enter port: ', port => {
-          this.node.connectToNode(port)
-        })
-
-        break
-      case '5': {
-        if (!this.node) {
-          console.log('You need to have a wallet to show it!')
-          break
-        }
-        this.node.wallet.show()
-        break
-      }
-      case '6': {
-        this.node.wallet.addKeyPair()
-        console.log('Key pair was added')
         break
       }
       default:
