@@ -34,6 +34,7 @@ export default class Runner {
       'Save wallet': {value: 4},
       'Add key pair': {value: 5},
       'Show connected': {value: 6},
+      'Load wallet': {value: 7},
     })
     console.log('\n')
     this.terminal.question('Please input value: ', async value => {
@@ -104,6 +105,18 @@ export default class Runner {
           break
         }
         console.table(this.node.knownNodes.map(({port}) => ({port})))
+        break
+      }
+      case '7': {
+        // To save the wallet:
+        this.terminal.question('Enter password: ', password => {
+          const loadedWallet = Wallet.loadFromFile(`myWallet${this.node.port}.dat`, password)
+          if (!loadedWallet) {
+            console.log('wrong password')
+            return
+          }
+          this.node = new Node(loadedWallet)
+        })
         break
       }
       default:

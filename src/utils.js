@@ -20,46 +20,62 @@ export function generateKeyPair() {
 }
 
 export function encryptAndSave(data, password, filePath) {
-  // TODO fix salt
-  const key = scryptSync(password, 'salt', 24) // Derive key from password
-  // TODO za mało bitów? ale jest 16 bajtów - chyba ok?
-  const iv = randomBytes(16) // Initialization vector
-  const cipher = createCipheriv('aes-192-gcm', key, iv)
+  const salt = randomBytes(16)
+  const key = scryptSync(password, salt, 32) // 256-bitowy klucz
+  const iv = randomBytes(12) //wektor inicjalizacyjny
+
+  const cipher = createCipheriv('aes-256-gcm', key, iv)
   let encrypted = cipher.update(JSON.stringify(data), 'utf8', 'hex')
   encrypted += cipher.final('hex')
 
-  const fileData = {iv: iv.toString('hex'), content: encrypted}
+  // Pobieranie tagu uwierzytelnienia (GCM) -> weryfikacja autentyczności danych
+  const authTag = cipher.getAuthTag()
+
+  const fileData = {
+    salt: salt.toString('hex'),
+    iv: iv.toString('hex'),
+    authTag: authTag.toString('hex'),
+    content: encrypted,
+  }
   fs.appendFileSync(filePath, JSON.stringify(fileData) + '\n')
 }
 
 export function readAndDecrypt(filePath, password) {
-  const key = scryptSync(password, 'salt', 24)
   let decryptedKeys = []
 
-  fs.readFileSync(filePath, 'utf8').split('\n').forEach(line => {
-    if (line.trim() === '') {
-      return
-    }
+  fs.readFileSync(filePath, 'utf8')
+    .split('\n')
+    .forEach((line) => {
+      if (line.trim() === '') {
+        return
+      }
 
-    const parsedLine = JSON.parse(line)
-    // Advanced Encryption Standard - symetryczny szyfr blokowy
-    // GCM - The Galois/Counter Mode - bezpieczny od CBC - ten szyfruje każdy blok z poprzednim i nie może być zrównoleglony
-    // Bloki szyfrowane niezależnie
-    const decipher = createDecipheriv(
-      'aes-256-gcm',
-      key,
-      Buffer.from(parsedLine.iv, 'hex'),
-    )
+      const parsedLine = JSON.parse(line)
 
-    let decrypted = decipher.update(parsedLine.content, 'hex', 'utf8')
-    decrypted += decipher.final('utf8')
-    const decryptedObject = JSON.parse(decrypted)
+      const salt = Buffer.from(parsedLine.salt, 'hex')
+      const iv = Buffer.from(parsedLine.iv, 'hex')
+      const authTag = Buffer.from(parsedLine.authTag, 'hex')
+      const encryptedContent = parsedLine.content
 
-    decryptedKeys.push({
-      publicKey: decryptedObject.publicKey,
-      privateKey: decryptedObject.privateKey,
+      const key = scryptSync(password, salt, 32)
+      // Advanced Encryption Standard - symetryczny szyfr blokowy
+      // GCM - The Galois/Counter Mode - bezpieczny od CBC - ten szyfruje każdy blok z poprzednim i nie może być zrównoleglony
+      // Bloki szyfrowane niezależnie
+      const decipher = createDecipheriv('aes-256-gcm', key, iv)
+      decipher.setAuthTag(authTag) // Ustawianie tagu uwierzytelnienia
+
+      try {
+        let decrypted = decipher.update(encryptedContent, 'hex', 'utf8')
+        decrypted += decipher.final('utf8')
+        const decryptedObject = JSON.parse(decrypted)
+
+        decryptedKeys.push({
+          publicKey: decryptedObject.publicKey,
+          privateKey: decryptedObject.privateKey,
+        })
+      } catch (err) {
+        console.error('Decryption failed:', err.message)
+      }
     })
-  })
-
   return decryptedKeys
 }

@@ -26,6 +26,7 @@ class Wallet {
   static loadFromFile(filePath, password) {
     try {
       const data = readAndDecrypt(filePath, password)
+      console.log(data)
       return new Wallet(null, data, null)
     } catch (e) {
       console.log('Error: Invalid password or file path')
