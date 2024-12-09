@@ -59,6 +59,13 @@ class Wallet {
       generateKeyPair()
     this.#keyPair.push({publicKey: getPublicKeyToHex(publicKey), privateKey: privateKey})
   }
+
+  getPublicKey(index){
+    return this.#keyPair[index].publicKey
+  }
+  getPrivateKey(index){
+    return this.#keyPair[index].privateKey
+  }
 }
 
 export default Wallet

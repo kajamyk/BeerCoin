@@ -1,8 +1,9 @@
 import WebSocket, {WebSocketServer} from 'ws'
 import Blockchain from './Blockchain.js'
 import Block from './Block.js'
+import Transaction from './Transaction.js'
 
-const P2P_PORT = process.env.P2P_PORT || '3000'
+const P2P_PORT = process.env.P2P_PORT || '3001'
 
 export default class Node {
   #validationMessages
@@ -73,6 +74,22 @@ export default class Node {
           new Block(block.timestamp, block.data, block.prevHash, block.nonce),
         )
         console.log('Added block to blockchain, blockchain is synchronized ⛓️')
+        return
+      } else if (parsedMessage.type === 'addTransaction') {
+        const {
+          payload: {port, transaction},
+        } = parsedMessage
+        if (
+          !this.knownNodes.some(
+            node => node.port === port,
+          )
+        ) {
+          return
+        }
+
+        this.blockchain.addTransaction(
+          new Transaction(transaction.from, transaction.to, transaction.amount, transaction.signature),
+        )
         return
       }
       throw new Error('Unhandled message type')
@@ -147,4 +164,24 @@ export default class Node {
       }
     })
   }
+
+  sendTransactionToPeers(transaction) {
+
+    this.knownNodes.forEach(({socket}) => {
+      try {
+        socket.send(
+          JSON.stringify({
+            type: 'addTransaction',
+            payload: {
+              port: this.port,
+              transaction,
+            },
+          }),
+        )
+      } catch (e) {
+        console.log(`Failed to connect to node ${this.port}`)
+      }
+    })
+  }
+
 }

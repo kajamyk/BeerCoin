@@ -2,6 +2,8 @@ import readlineSync from 'readline'
 import Block from './Block.js'
 import Wallet from './Wallet.js'
 import Node from './Node.js'
+import { generateKeyPair } from './utils.js'
+import Transaction from './Transaction.js'
 
 export default class Runner {
   #selectedOption
@@ -30,11 +32,13 @@ export default class Runner {
     console.table({
       'Connect to node': {value: 1},
       'Show wallet': {value: 2},
-      'Add block': {value: 3},
+      'Create transaction': {value: 3},
       'Save wallet': {value: 4},
       'Add key pair': {value: 5},
       'Show connected': {value: 6},
       'Load wallet': {value: 7},
+      'Show balance': {value: 8},
+      'Mine': {value: 9}
     })
     console.log('\n')
     this.terminal.question('Please input value: ', async value => {
@@ -67,17 +71,31 @@ export default class Runner {
       }
       case '3': {
         if (!this.node) {
-          console.log('You need to have a wallet to add block!')
+          console.log('You need to have a wallet to create transaction!')
           break
         }
-        this.terminal.question('From: ', from => {
-          this.terminal.question('to: ', to => {
+        this.terminal.question('From (key index): ', keyIndex => {
+          this.terminal.question('To (public key): ', to => {
             this.terminal.question('amount: ', amount => {
-              const block = new Block(Date.now().toString(), [
-                {from, to, amount},
-              ])
-              this.node.blockchain.addBlock(block)
-              this.node.sendBlockToPeers(block)
+              
+              const fromPub = this.node.wallet.getPublicKey(keyIndex)
+              const fromPriv = this.node.wallet.getPrivateKey(keyIndex)
+              const balance = this.node.blockchain.getBalance(fromPub)
+              if(balance < Number(amount)){
+                console.log(`You cannot send ${amount} coins, you only have ${balance}`)
+                return
+              }
+              const transaction = new Transaction(
+                fromPub,
+                to,
+                Number(amount),
+              )
+              transaction.sign({
+                publicKey: fromPub,
+                privateKey: fromPriv,
+              })
+              this.node.blockchain.addTransaction(transaction)
+              this.node.sendTransactionToPeers(transaction)
             })
           })
         })
@@ -119,6 +137,26 @@ export default class Runner {
         })
         break
       }
+      case '8': {
+        this.terminal.question('Public key: ', publicKey => {
+          const balance = this.node.blockchain.getBalance(publicKey)
+          console.log(balance);
+        })
+        break
+      }
+      case '9':
+        this.terminal.question('Key index:', keyIndex =>{
+          const block = this.node.blockchain.mineTransactions(
+            this.node.wallet.getPublicKey(keyIndex)
+          )
+          if(block)
+            this.node.sendBlockToPeers(block)
+        })
+        
+        break
+      case '10':
+        console.log(this.node.blockchain.transactions)
+        break
       default:
         break
     }

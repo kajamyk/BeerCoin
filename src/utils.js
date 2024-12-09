@@ -79,3 +79,7 @@ export function readAndDecrypt(filePath, password) {
     })
   return decryptedKeys
 }
+
+export function getPublicKeyToHex(publicKey) {
+  return publicKey.toString('hex')
+}
