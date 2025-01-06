@@ -7,10 +7,10 @@ export default class Block {
   constructor(timestamp = '', data = [], prevHash = '', nonce = 0) {
     this.timestamp = timestamp
     this.data = data
-    this.hash = this.getHash()
-    this.prevHash = prevHash
     // licznik prób do proof of work; zmienność hasha
     this.nonce = nonce
+    this.prevHash = prevHash
+    this.hash = this.getHash()
   }
 
   getHash() {

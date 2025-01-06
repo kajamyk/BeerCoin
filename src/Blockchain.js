@@ -4,7 +4,7 @@ import {getPublicKeyToHex, generateKeyPair} from './utils.js'
 
 export default class Blockchain {
   // inicjalizacja blokiem początkującym
-  constructor(difficulty = 1) {
+  constructor(difficulty = 1, chain = null) {
     this.difficulty = difficulty
     this.coinbaseamount = 20
     this.maxTransactionsInBlock = 10
@@ -16,7 +16,10 @@ export default class Blockchain {
 
     const coinbaseTransaction = this.createCoinbaseTransaction('3056301006072a8648ce3d020106052b8104000a03420004b86156c8c9a6771f4f3a61eac4216dc7e359fb8e261005a8afdcc44bb220d017ef130c7f713ad410ac5738d3b54c9de64885ccf7b0e34a744e8d60609d5d987d')
     coinbaseTransaction.sign(this.coinbaseKeyPair)
-    this.chain = [new Block((+new Date('0')).toString(), [coinbaseTransaction])];
+    if(chain)
+      this.chain = chain.map(b => new Block(b.timestamp, b.data, b.prevHash, b.nonce))
+    else
+      this.chain = [new Block((+new Date('0')).toString(), [coinbaseTransaction])];
     this.transactions = []
   }
 
@@ -97,7 +100,6 @@ export default class Blockchain {
 
     // uniemożliwienie modyfikacji po dodaniu bloku
     this.chain.push(Object.freeze(block))
-    console.log(this.toString())
   }
 
   connectToLastBlock(block) {
@@ -106,11 +108,10 @@ export default class Blockchain {
   }
 
   syncBlockchain(block) {
-    this.connectToLastBlock(block)
+    //this.connectToLastBlock(block)
     if(this.isValid()){
       this.chain.push(Object.freeze(block))
     }
-    console.log('New blockchain: ', this.toString())
   }
 
   // Weryfikacja czy hashe się zgadzają dla wszystkich bloków
@@ -121,6 +122,7 @@ export default class Blockchain {
       const isFirst = Number(currentIndex) === 0
       const prevBlock = isFirst ? INITIAL_BLOCK : chain[currentIndex - 1]
       const currentBlock = chain[currentIndex]
+      if(isFirst) continue
       if (
         currentBlock.hash !== currentBlock.getHash() ||
         prevBlock.hash !== currentBlock.prevHash ||

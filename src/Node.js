@@ -4,16 +4,20 @@ import Block from './Block.js'
 import Transaction from './Transaction.js'
 
 const P2P_PORT = process.env.P2P_PORT || '3001'
+let alternativeBlockchains = []
+let blockchain = new Blockchain()
 
 export default class Node {
-  #validationMessages
+  port = P2P_PORT
+  wallet
+  knownNodes = []
+  maxChainLengthDifference = 2
 
   constructor(wallet) {
     this.port = P2P_PORT
     this.wallet = wallet
     this.knownNodes = []
-    this.#validationMessages = {}
-    this.blockchain = new Blockchain()
+    this.maxChainLengthDifference = 2
   }
 
   run() {
@@ -40,9 +44,9 @@ export default class Node {
         const {port, withBlockchain} = data
 
         try {
-          await this.connectToNode({
+          this.connectToNode({
             port,
-            shouldConnectToBlockchain: withBlockchain,
+            shouldConnectToBlockchain: true,
           })
         } catch (e) {
           console.log(`Failed to connect to node ${port}`)
@@ -51,10 +55,32 @@ export default class Node {
       } else if (parsedMessage.type === 'sendBlockchain') {
         const {payload: data} = parsedMessage
 
-        this.blockchain = new Blockchain(
+        const receivedBlockchain = new Blockchain(
           data.blockchain.difficulty,
           data.blockchain.chain,
         )
+
+        if(receivedBlockchain.isValid()){
+          const currentBlockchainLength = blockchain.chain.length
+          const receivedBlockchainLenth = receivedBlockchain.chain.length
+          const lengthDifference = currentBlockchainLength - receivedBlockchainLenth
+          
+          if(lengthDifference <= this.maxChainLengthDifference && lengthDifference >= -this.maxChainLengthDifference){
+            if(lengthDifference >= 0){
+              alternativeBlockchains.push(receivedBlockchain)
+            }
+            else{
+              alternativeBlockchains.push(blockchain)
+              blockchain = receivedBlockchain
+            }
+          }
+          else if(lengthDifference > this.maxChainLengthDifference){
+            //odrzuć otrzymany blockchain
+          }
+          else {
+            blockchain = receivedBlockchain
+          }
+        }
 
         return
       } else if (parsedMessage.type === 'addBlock') {
@@ -70,9 +96,29 @@ export default class Node {
           return
         }
 
-        this.blockchain.syncBlockchain(
-          new Block(block.timestamp, block.data, block.prevHash, block.nonce),
-        )
+        const blockchains = [blockchain, ...alternativeBlockchains]
+        for(let b of blockchains){
+          if(b.getLastBlock().getHash() === block.prevHash){
+            b.syncBlockchain(
+              new Block(block.timestamp, block.data, block.prevHash, block.nonce),
+            )
+            break
+          }
+        }
+
+        if(alternativeBlockchains.length > 0){
+          const currentBlockchainLength = blockchain.chain.length
+          const longestAlternativeBlockchain = alternativeBlockchains.reduce((prev, current) => {return (prev && prev.chain.length > current.chain.length) ? prev : current})
+          if(longestAlternativeBlockchain.chain.length - currentBlockchainLength > this.maxChainLengthDifference){
+            alternativeBlockchains.push(blockchain)
+            blockchain = longestAlternativeBlockchain
+
+            const minBlockchainLength = blockchain.chain.length - this.maxChainLengthDifference
+            alternativeBlockchains = alternativeBlockchains.filter(b => b.chain.length >= minBlockchainLength)
+          }
+        }
+        
+
         console.log('Added block to blockchain, blockchain is synchronized ⛓️')
         return
       } else if (parsedMessage.type === 'addTransaction') {
@@ -87,7 +133,7 @@ export default class Node {
           return
         }
 
-        this.blockchain.addTransaction(
+        blockchain.addTransaction(
           new Transaction(transaction.from, transaction.to, transaction.amount, transaction.signature),
         )
         return
@@ -103,7 +149,6 @@ export default class Node {
   }) {
     const socket = new WebSocket(`ws://localhost:${port}`)
     socket.on('open', () => {
-      // tuu
       console.log(`You connected to node ${port}`)
       this.knownNodes.forEach(({socket: knownSocket, ...rest}) => {
         socket.send(JSON.stringify({payload: rest, type: 'connect'}))
@@ -127,7 +172,7 @@ export default class Node {
             JSON.stringify({
               payload: {
                 port: this.port,
-                blockchain: this.blockchain,
+                blockchain: blockchain,
               },
               type: 'sendBlockchain',
             }),
@@ -184,4 +229,30 @@ export default class Node {
     })
   }
 
+  getAlternativeBlockchains(){
+    return alternativeBlockchains
+  }
+
+  getBlockchain(){
+    return blockchain
+  }
+
+  sendBlockchainToPeers(){
+    this.knownNodes.forEach(({socket}) => {
+      try {
+        socket.send(
+          JSON.stringify({
+            payload: {
+              port: this.port,
+              blockchain: blockchain,
+            },
+            type: 'sendBlockchain',
+          }),
+        )
+      } catch (e) {
+        console.log(`Failed to connect to node ${port}`)
+      }
+    })
+  }
+  
 }

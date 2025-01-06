@@ -7,6 +7,7 @@ import Transaction from './Transaction.js'
 
 export default class Runner {
   #selectedOption
+  shouldPrompt = true
 
   constructor() {
     this.#selectedOption = null
@@ -23,7 +24,8 @@ export default class Runner {
     this.node.run()
     this.promptForOptions()
     this.terminal.on('line', input => {
-      this.promptForOptions()
+      if(this.shouldPrompt)
+        this.promptForOptions()
     })
   }
 
@@ -44,7 +46,6 @@ export default class Runner {
     this.terminal.question('Please input value: ', async value => {
       this.#selectedOption = value
       await this.handleStart()
-      await this.promptForOptions()
     })
   }
 
@@ -56,8 +57,10 @@ export default class Runner {
           console.log('You need to have a wallet to make a connection!')
           break
         }
+        this.shouldPrompt = false
         this.terminal.question('Enter port: ', port => {
           this.node.connectToNode({port, shouldConnectToBlockchain: true})
+          this.shouldPrompt = true
         })
 
         break
@@ -74,13 +77,14 @@ export default class Runner {
           console.log('You need to have a wallet to create transaction!')
           break
         }
+        this.shouldPrompt = false
         this.terminal.question('From (key index): ', keyIndex => {
           this.terminal.question('To (public key): ', to => {
             this.terminal.question('amount: ', amount => {
-              
+              this.shouldPrompt = true
               const fromPub = this.node.wallet.getPublicKey(keyIndex)
               const fromPriv = this.node.wallet.getPrivateKey(keyIndex)
-              const balance = this.node.blockchain.getBalance(fromPub)
+              const balance = this.node.getBlockchain().getBalance(fromPub)
               if(balance < Number(amount)){
                 console.log(`You cannot send ${amount} coins, you only have ${balance}`)
                 return
@@ -94,7 +98,7 @@ export default class Runner {
                 publicKey: fromPub,
                 privateKey: fromPriv,
               })
-              this.node.blockchain.addTransaction(transaction)
+              this.node.getBlockchain().addTransaction(transaction)
               this.node.sendTransactionToPeers(transaction)
             })
           })
@@ -106,9 +110,11 @@ export default class Runner {
           console.log('You need to have a wallet!')
           break
         }
+        this.shouldPrompt = false
         // To save the wallet:
         this.terminal.question('Enter password: ', password => {
           this.node.wallet.saveToFile(`myWallet${this.node.port}.dat`, password)
+          this.shouldPrompt = true
         })
         break
       }
@@ -126,8 +132,10 @@ export default class Runner {
         break
       }
       case '7': {
+        this.shouldPrompt = false
         // To save the wallet:
         this.terminal.question('Enter password: ', password => {
+          this.shouldPrompt = true
           const loadedWallet = Wallet.loadFromFile(`myWallet${this.node.port}.dat`, password)
           if (!loadedWallet) {
             console.log('wrong password')
@@ -138,24 +146,49 @@ export default class Runner {
         break
       }
       case '8': {
+        this.shouldPrompt = false
         this.terminal.question('Public key: ', publicKey => {
-          const balance = this.node.blockchain.getBalance(publicKey)
+          const balance = this.node.getBlockchain().getBalance(publicKey)
           console.log(balance);
+          this.shouldPrompt = true
         })
         break
       }
       case '9':
+        this.shouldPrompt = false
         this.terminal.question('Key index:', keyIndex =>{
-          const block = this.node.blockchain.mineTransactions(
+          this.shouldPrompt = true
+          const block = this.node.getBlockchain().mineTransactions(
             this.node.wallet.getPublicKey(keyIndex)
           )
+          console.log(block)
           if(block)
             this.node.sendBlockToPeers(block)
         })
         
         break
       case '10':
-        console.log(this.node.blockchain.transactions)
+        console.log(this.node.getBlockchain().transactions)
+        break
+      case '11':
+        console.log(`Main chain length: ${this.node.getBlockchain().chain.length}`)
+        console.log(this.node.getAlternativeBlockchains())
+        console.log(`Alternative chain lengths: ${this.node.getAlternativeBlockchains().map(e => e.chain.length).join(', ')}`)
+        break
+      case '12':
+        console.log(this.node.getBlockchain().chain)
+        break
+      case '13':
+        this.shouldPrompt = false
+        this.terminal.question('Command:', command =>{
+          this.shouldPrompt = true
+          try{
+            eval(command)
+          }
+          catch{
+
+          }
+        })
         break
       default:
         break
